@@ -1,0 +1,6 @@
+{
+  "name": "AI Startup Kit — Dynamic Island Search",
+  "description": "Live responsive device preview workbench showcasing AI Startup Kit with an adaptive Dynamic Island search bar.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
