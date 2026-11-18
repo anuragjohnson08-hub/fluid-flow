@@ -8,6 +8,7 @@ export interface ReviewApiProvider {
   reviewFields: string;
   summary: string;
   docsUrl: string;
+  siteUrl: string;
 }
 
 export const REVIEW_API_PROVIDERS: ReviewApiProvider[] = [
@@ -22,6 +23,7 @@ export const REVIEW_API_PROVIDERS: ReviewApiProvider[] = [
     summary:
       'Aggregates critic scores, editorial review excerpts, and recommendation percentages from major gaming outlets.',
     docsUrl: 'https://app.swaggerhub.com/apis-docs/OpenCritic/OpenCritic-API',
+    siteUrl: 'https://opencritic.com/',
   },
   {
     id: 'rawg',
@@ -34,6 +36,7 @@ export const REVIEW_API_PROVIDERS: ReviewApiProvider[] = [
     summary:
       'Provides community rating distributions, review totals, and syndicated Metacritic scores per game.',
     docsUrl: 'https://api.rawg.io/docs/',
+    siteUrl: 'https://rawg.io/',
   },
   {
     id: 'igdb',
@@ -46,6 +49,7 @@ export const REVIEW_API_PROVIDERS: ReviewApiProvider[] = [
     summary:
       'Twitch-backed database exposing critic aggregates, user scores, and review counts via Apicalypse queries.',
     docsUrl: 'https://api-docs.igdb.com/',
+    siteUrl: 'https://www.igdb.com/',
   },
   {
     id: 'steam',
@@ -58,6 +62,7 @@ export const REVIEW_API_PROVIDERS: ReviewApiProvider[] = [
     summary:
       'Official Valve Storefront endpoint returning verified player reviews, helpfulness votes, and review sentiment.',
     docsUrl: 'https://partner.steamgames.com/doc/store/getreviews',
+    siteUrl: 'https://store.steampowered.com/',
   },
   {
     id: 'giantbomb',
@@ -70,6 +75,7 @@ export const REVIEW_API_PROVIDERS: ReviewApiProvider[] = [
     summary:
       'Offers structured editorial review entries, reviewer details, and detailed game database records.',
     docsUrl: 'https://www.giantbomb.com/api/documentation/',
+    siteUrl: 'https://www.giantbomb.com/',
   },
   {
     id: 'mobygames',
@@ -82,6 +88,7 @@ export const REVIEW_API_PROVIDERS: ReviewApiProvider[] = [
     summary:
       'Long-running archive providing MobyScores, critic score histories, and platform-by-platform release data.',
     docsUrl: 'https://www.mobygames.com/info/api/',
+    siteUrl: 'https://www.mobygames.com/',
   },
 ];
 

@@ -1,4 +1,3 @@
-import { ExternalLink } from 'lucide-react';
 import { useEffect, useRef, useState, type CSSProperties, type MouseEvent } from 'react';
 import { REVIEW_API_PROVIDERS } from '../data/reviewApis';
 import { buildWallWavePath } from '../utils/bentoWave';
@@ -503,7 +502,7 @@ export function LogosAndBento() {
                 <div
                   role="list"
                   aria-label="Game review websites credited via API"
-                  className="relative z-10 grid grid-cols-2 sm:grid-cols-3 gap-x-2.5 gap-y-3 sm:gap-x-3 sm:gap-y-4 py-4"
+                  className="relative z-10 grid grid-cols-2 sm:grid-cols-3 place-items-center gap-x-4 gap-y-5 py-6"
                 >
                   {REVIEW_API_PROVIDERS.map((provider, idx) => {
                     const motion = CREDIT_FLOAT_MOTION[idx % CREDIT_FLOAT_MOTION.length];
@@ -515,31 +514,17 @@ export function LogosAndBento() {
                     } as CSSProperties;
 
                     return (
-                      <div key={provider.id} role="listitem" className={motion.offsetClass}>
+                      <div key={provider.id} role="listitem" className={`${motion.offsetClass} text-center`}>
                         <a
-                          href={provider.docsUrl}
+                          href={provider.siteUrl}
                           target="_blank"
                           rel="noopener noreferrer"
                           data-testid={`review-credit-${provider.id}`}
+                          aria-label={`Visit ${provider.name} official site`}
                           style={floatStyle}
-                          className={`credit-float-item group/credit flex flex-col justify-between rounded-lg border px-3 py-2.5 transition-colors ${
-                            motion.featured
-                              ? 'border-white/30 bg-[#141414]/95 hover:border-white/60 hover:bg-[#1f1f1f]'
-                              : 'border-[#262626] bg-[#0b0b0b]/95 hover:border-white/45 hover:bg-[#161616]'
-                          }`}
+                          className="credit-float-item inline-block text-sm sm:text-base font-bold tracking-tight text-white/85 underline decoration-white/25 underline-offset-4 hover:text-white hover:decoration-white transition-colors"
                         >
-                          <div className="flex items-center justify-between gap-1.5">
-                            <span className="truncate text-xs font-bold tracking-tight text-white group-hover/credit:text-neutral-200 transition-colors">
-                              {provider.name}
-                            </span>
-                            <ExternalLink
-                              className="h-3 w-3 shrink-0 text-neutral-500 opacity-60 group-hover/credit:opacity-100 group-hover/credit:text-white transition-all"
-                              aria-hidden="true"
-                            />
-                          </div>
-                          <span className="mt-0.5 truncate text-[10px] font-medium text-neutral-400">
-                            {provider.shortTag}
-                          </span>
+                          {provider.name}
                         </a>
                       </div>
                     );

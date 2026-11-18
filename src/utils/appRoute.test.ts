@@ -69,7 +69,7 @@ test('computeIntroPillFrame clamps progress and computes text shift and track gr
   assert.equal(mid.progress, 0.5);
   assert.equal(mid.textShiftPx, -25);
   assert.ok(mid.trackBackground.includes('50%'));
-  assert.ok(mid.trackBackground.includes('rgba(239, 68, 68,'));
+  assert.ok(mid.trackBackground.includes('rgba(212, 212, 216,'));
 
   const overshoot = computeIntroPillFrame(426, 420, 50);
   assert.equal(overshoot.travelPx, 426);
@@ -90,7 +90,7 @@ test('computeBackSliderFrame moves thumb right-to-left and shifts label positive
   assert.equal(mid.thumbTranslateX, -100);
   assert.equal(mid.textShiftPx, 29);
   assert.ok(mid.trackBackground.includes('50%'));
-  assert.ok(mid.trackBackground.includes('rgba(239, 68, 68,'));
+  assert.ok(mid.trackBackground.includes('rgba(212, 212, 216,'));
 
   const end = computeBackSliderFrame(204, 200, 58);
   assert.equal(end.progress, 1);

@@ -12,6 +12,7 @@ test('REVIEW_API_PROVIDERS lists all six verified game review API websites with 
     assert.ok(provider.endpoint.length > 0);
     assert.ok(provider.reviewFields.length > 0);
     assert.ok(provider.docsUrl.startsWith('https://'), `Invalid URL: ${provider.docsUrl}`);
+    assert.ok(provider.siteUrl.startsWith('https://'), `Invalid Site URL: ${provider.siteUrl}`);
   }
 });
 
