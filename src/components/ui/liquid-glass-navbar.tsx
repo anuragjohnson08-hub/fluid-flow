@@ -9,6 +9,7 @@
  */
 
 import * as React from "react";
+import { computeLiquidFrameDelta } from "../../utils/liquidSpeed";
 
 export type NimbusFx = "plane" | "drop" | "spin" | "glow" | "wave" | "pop" | "none";
 
@@ -275,7 +276,7 @@ function makeState() {
     b: { x: 0, y: 0, vx: 0, vy: 0 } as Body,
     sy: { s: 1, v: 0 },
     lead: 0 as 0 | 1,
-    lagFrom: 0,
+    lagRemaining: 0,
     sats: [] as Sat[],
     rips: [] as Rip[],
     t: { x: 0, y: 0, q: 0, r: 21 },
@@ -370,6 +371,7 @@ export interface LiquidWaterSurfaceProps {
   borderRadius?: number;
   enabled?: boolean;
   rippleSignal?: { index: number; seq: number } | null;
+  speed?: number;
 }
 
 export function LiquidWaterSurface({
@@ -381,6 +383,7 @@ export function LiquidWaterSurface({
   borderRadius = 999,
   enabled = true,
   rippleSignal = null,
+  speed = 1,
 }: LiquidWaterSurfaceProps) {
   useNimbusStyles();
   const canvasRef = React.useRef<HTMLCanvasElement>(null);
@@ -397,11 +400,13 @@ export function LiquidWaterSurface({
   const monoRef = React.useRef(mono);
   const radiusRef = React.useRef(borderRadius);
   const orientRef = React.useRef(orientation);
+  const speedRef = React.useRef(speed);
   darkRef.current = dark;
   emeraldRef.current = emerald;
   monoRef.current = mono;
   radiusRef.current = borderRadius;
   orientRef.current = orientation;
+  speedRef.current = speed;
 
   const draw = React.useCallback(() => {
     const s = st.current;
@@ -485,7 +490,7 @@ export function LiquidWaterSurface({
     }
   }, []);
 
-  const step = React.useCallback((dt: number, now: number) => {
+  const step = React.useCallback((dt: number) => {
     const s = st.current;
     const T = s.t;
     s.time += dt;
@@ -509,7 +514,7 @@ export function LiquidWaterSurface({
         const lead = i === s.lead;
         const k = lead ? 210 : 72;
         const c = lead ? 25 : 13;
-        const f = !lead && now < s.lagFrom ? 0.08 : 1;
+        const f = !lead && s.lagRemaining > 0 ? 0.08 : 1;
 
         B.vx += (k * (T.x - B.x) - c * B.vx) * dt * f;
         B.x += B.vx * dt;
@@ -536,6 +541,7 @@ export function LiquidWaterSurface({
           still = false;
         }
       });
+      s.lagRemaining = Math.max(0, s.lagRemaining - dt);
 
       const L = bodies[s.lead];
       const speed = Math.hypot(L.vx, L.vy);
@@ -600,10 +606,11 @@ export function LiquidWaterSurface({
     const tick = (now: number) => {
       const elapsed = Math.max(0.001, Math.min((now - s.last) / 1000, 0.35));
       s.last = now;
-      const substeps = Math.max(1, Math.min(16, Math.ceil(elapsed / 0.016)));
-      const subDt = elapsed / substeps;
+      const simElapsed = computeLiquidFrameDelta(elapsed, speedRef.current);
+      const substeps = Math.max(1, Math.min(16, Math.ceil(simElapsed / 0.016)));
+      const subDt = simElapsed / substeps;
       for (let stepIdx = 0; stepIdx < substeps; stepIdx++) {
-        step(subDt, now);
+        step(subDt);
       }
       draw();
       const busy = s.moving || s.rips.length > 0 || s.sats.length > 0 || s.mouse.s > 0.01;
@@ -643,7 +650,7 @@ export function LiquidWaterSurface({
       const da = Math.hypot(nx - s.a.x, ny - s.a.y);
       const db = Math.hypot(nx - s.b.x, ny - s.b.y);
       s.lead = da <= db ? 0 : 1;
-      s.lagFrom = performance.now() + 70;
+      s.lagRemaining = 0.07;
       s.moving = true;
       s.split = false;
     }

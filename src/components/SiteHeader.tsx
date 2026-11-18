@@ -14,6 +14,15 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react
 import type { AppPage } from '../utils/appRoute';
 import { getSectionScrollTarget } from '../utils/appRoute';
 import type { KeywordRow } from '../utils/keywords';
+import {
+  DEFAULT_NAV_LIQUID_SPEED,
+  LIQUID_SPEED_STEP,
+  MAX_LIQUID_SPEED,
+  MIN_LIQUID_SPEED,
+  NAV_LIQUID_SPEED_PRESETS,
+  clampLiquidSpeed,
+  formatLiquidSpeed,
+} from '../utils/liquidSpeed';
 import { DynamicIsland } from './DynamicIsland';
 import { LiquidWaterSurface } from './ui/liquid-glass-navbar';
 
@@ -56,6 +65,8 @@ export function SiteHeader({
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [activeNavIndex, setActiveNavIndex] = useState(0);
   const [navRipple, setNavRipple] = useState<{ index: number; seq: number } | null>(null);
+  const [navLiquidSpeed, setNavLiquidSpeed] = useState<number>(DEFAULT_NAV_LIQUID_SPEED);
+  const [speedBarOpen, setSpeedBarOpen] = useState(true);
   const lastHoverOpenRef = useRef<{ id: DesktopMenuId; at: number } | null>(null);
   const pillRef = useRef<HTMLDivElement | null>(null);
   const menuBtnRef = useRef<HTMLButtonElement | null>(null);
@@ -544,6 +555,7 @@ export function SiteHeader({
             borderRadius={999}
             enabled={!isMobile}
             rippleSignal={navRipple}
+            speed={navLiquidSpeed}
           />
         </nav>
 
@@ -694,6 +706,76 @@ export function SiteHeader({
             </nav>
           </div>
         </div>
+      </div>
+
+      <div
+        className="pointer-events-none mx-auto mt-2 hidden max-w-[1080px] justify-end md:flex"
+        onClick={(e) => e.stopPropagation()}
+      >
+        {speedBarOpen ? (
+          <div
+            role="region"
+            aria-label="Navbar liquid speed test bar"
+            className="pointer-events-auto flex items-center gap-2.5 rounded-full border border-[#262626] bg-[#000000]/95 px-3.5 py-1.5 text-[11px] text-[#a3a3a3] shadow-[0_8px_28px_-10px_rgba(0,0,0,0.9)] backdrop-blur-xl"
+          >
+            <label htmlFor="nav-liquid-speed-slider" className="whitespace-nowrap font-medium text-white">
+              Liquid speed
+            </label>
+            <input
+              id="nav-liquid-speed-slider"
+              type="range"
+              min={MIN_LIQUID_SPEED}
+              max={MAX_LIQUID_SPEED}
+              step={LIQUID_SPEED_STEP}
+              value={navLiquidSpeed}
+              onChange={(e) => setNavLiquidSpeed(clampLiquidSpeed(Number(e.target.value)))}
+              aria-label="Liquid speed"
+              className="h-1.5 w-28 cursor-pointer accent-white"
+            />
+            <span
+              data-testid="liquid-speed-readout"
+              className="w-11 text-right font-mono text-[11px] font-semibold tabular-nums text-white"
+            >
+              {formatLiquidSpeed(navLiquidSpeed)}
+            </span>
+            <div className="flex items-center gap-1 border-l border-[#262626] pl-2">
+              {NAV_LIQUID_SPEED_PRESETS.map((preset) => {
+                const isSelected = Math.abs(navLiquidSpeed - preset) < 0.001;
+                return (
+                  <button
+                    key={preset}
+                    type="button"
+                    onClick={() => setNavLiquidSpeed(preset)}
+                    className={`cursor-pointer rounded-full px-2 py-0.5 font-mono text-[10px] tabular-nums transition-colors ${
+                      isSelected
+                        ? 'bg-white font-semibold text-black'
+                        : 'bg-[#121212] text-[#a3a3a3] hover:bg-[#1f1f1f] hover:text-white'
+                    }`}
+                  >
+                    {formatLiquidSpeed(preset)}
+                  </button>
+                );
+              })}
+            </div>
+            <button
+              type="button"
+              onClick={() => setSpeedBarOpen(false)}
+              aria-label="Collapse liquid speed bar"
+              className="ml-0.5 cursor-pointer rounded-full border border-[#262626] px-2 py-0.5 text-[10px] text-[#a3a3a3] transition-colors hover:border-white/40 hover:text-white"
+            >
+              Hide
+            </button>
+          </div>
+        ) : (
+          <button
+            type="button"
+            onClick={() => setSpeedBarOpen(true)}
+            aria-label="Show liquid speed bar"
+            className="pointer-events-auto cursor-pointer rounded-full border border-[#262626] bg-[#000000]/95 px-3 py-1 font-mono text-[11px] tabular-nums text-[#a3a3a3] shadow-[0_8px_24px_-10px_rgba(0,0,0,0.9)] backdrop-blur-xl transition-colors hover:border-white/40 hover:text-white"
+          >
+            Liquid {formatLiquidSpeed(navLiquidSpeed)}
+          </button>
+        )}
       </div>
     </header>
   );
