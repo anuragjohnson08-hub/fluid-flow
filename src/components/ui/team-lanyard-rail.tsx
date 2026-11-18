@@ -472,7 +472,7 @@ const BadgeFaces = React.memo(function BadgeFaces({ item, tone }: { item: Lanyar
                 draggable={false}
                 decoding="async"
                 onError={() => setFailed(true)}
-                className="pointer-events-none absolute inset-0 block size-full select-none object-cover grayscale"
+                className="pointer-events-none absolute inset-0 block size-full select-none object-cover"
               />
             )}
           </span>
@@ -1616,7 +1616,7 @@ export function TeamLanyardRail({
         role="group"
         aria-label={heading ?? "Team"}
         aria-roledescription="lanyard rail"
-        className={`relative mt-4 w-full touch-pan-y select-none ${
+        className={`relative mt-4 w-full touch-pan-y select-none [--color-chart-1:#10b981] [--color-chart-2:#38bdf8] [--color-chart-3:#f59e0b] [--color-chart-4:#a855f7] [--color-chart-5:#f43f5e] ${
           !size.carousel && loop ? (grabbing ? "cursor-grabbing" : "cursor-grab") : ""
         }`}
         style={{ height: g.height, overflowX: "clip" }}
