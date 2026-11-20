@@ -9,7 +9,14 @@
  */
 
 import * as React from "react";
-import { computeLiquidFrameDelta } from "../../utils/liquidSpeed";
+import {
+  computeBridgeRect,
+  computeSurfaceCanvasBounds,
+  computeWaterStepBounds,
+  isDropletInsideHost,
+  isVerticalTravel,
+  type SurfaceRect,
+} from "../../utils/liquidSurface";
 
 export type NimbusFx = "plane" | "drop" | "spin" | "glow" | "wave" | "pop" | "none";
 
@@ -207,33 +214,37 @@ function useNimbusStyles() {
 const VERT = `attribute vec2 a;void main(){gl_Position=vec4(a,0.,1.);}`;
 const FRAG = `precision highp float;
 uniform vec2 uRes;uniform float uDpr;uniform float uTime;uniform vec4 uPill;uniform float uPillRad;
+uniform vec4 uSubPanel;uniform float uSubRad;uniform vec4 uBridge;
 uniform vec4 uBlob[6];uniform float uSy[6];uniform vec4 uRip[6];uniform vec3 uMouse;uniform float uDark;uniform float uAmb;uniform float uEmerald;uniform float uMono;uniform float uShowRim;
 float sdRB(vec2 p,vec2 b,float r){vec2 q=abs(p)-b+r;return length(max(q,0.))+min(max(q.x,q.y),0.)-r;}
 float sdCap(vec2 p,vec4 B,float sy){p-=B.xy;p.y/=sy;p.x=max(abs(p.x)-B.z,0.);return(length(p)-B.w)*min(1.,sy);}
 float smin(float a,float b,float k){float h=clamp(.5+.5*(b-a)/k,0.,1.);return mix(b,a,h)-k*h*(1.-h);}
-float dropD(vec2 p){float d=1e4;for(int i=0;i<6;i++){if(uBlob[i].w>.5){d=smin(d,sdCap(p,uBlob[i],uSy[i]),13.);}}return d;}
+float dropD(vec2 p){float d=1e4;for(int i=0;i<6;i++){if(uBlob[i].w>.5){d=smin(d,sdCap(p,uBlob[i],uSy[i]),14.);}}return d;}
 float pillD(vec2 p){vec2 h=uPill.zw*.5;float rad=min(uPillRad,min(h.x,h.y));return sdRB(p-uPill.xy-h,h,rad);}
+float subD(vec2 p){if(uSubPanel.z<=.5)return 1e4;vec2 h=uSubPanel.zw*.5;float rad=min(uSubRad,min(h.x,h.y));return sdRB(p-uSubPanel.xy-h,h,rad);}
+float bridgeD(vec2 p){if(uBridge.z<=.5)return 1e4;vec2 h=uBridge.zw*.5;float rad=min(8.,min(h.x,h.y));return sdRB(p-uBridge.xy-h,h,rad);}
+float containerD(vec2 p){float d=pillD(p);if(uSubPanel.z>.5){float ds=subD(p);if(uBridge.z>.5){d=smin(d,smin(ds,bridgeD(p),10.),10.);}else{d=min(d,ds);}}return d;}
 float lens(float d,float w){float t=clamp(-d/w,0.,1.);return sqrt(1.-(1.-t)*(1.-t));}
 float waves(vec2 p){float w=0.;
- for(int i=0;i<6;i++){vec4 R=uRip[i];if(R.w>0.){float x=length(p-R.xy)-R.z*240.;w+=R.w*exp(-R.z*1.7)*sin(x*.3)*exp(-x*x/700.);}}
- vec2 m=p-uMouse.xy;w+=uMouse.z*3.6*exp(-dot(m,m)/1000.);
- w+=uAmb*(sin(p.x*.05+uTime*1.2)*.45+sin(p.x*.13-uTime*.85+p.y*.2)*.25);return w;}
-float H(vec2 p){float dp=pillD(p);return lens(dp,min(uPill.z,uPill.w)*.36)*2.4*uShowRim+lens(dropD(p),11.)*7.5+waves(p)*smoothstep(0.,7.,-dp);}
+ for(int i=0;i<6;i++){vec4 R=uRip[i];if(R.w>0.){float x=length(p-R.xy)-R.z*260.;w+=R.w*exp(-R.z*2.)*sin(x*.3)*exp(-x*x/800.);}}
+ vec2 m=p-uMouse.xy;w+=uMouse.z*3.5*exp(-dot(m,m)/900.);
+ w+=uAmb*(sin(p.x*.05+uTime*1.2)*.35+sin(p.x*.12-uTime*.8+p.y*.18)*.2);return w;}
+float H(vec2 p){float dp=pillD(p);float dc=containerD(p);return lens(dp,min(uPill.z,uPill.w)*.36)*2.4*uShowRim+lens(dropD(p),11.)*7.5+waves(p)*smoothstep(0.,7.,-dc);}
 float caus(vec2 p,float t){vec2 q=p;float c=0.;for(int i=0;i<3;i++){q+=vec2(sin(q.y*1.1+t),cos(q.x*1.3-t*.7))*.6;c+=1./(1.+16.*abs(sin(q.x)*sin(q.y)));}return c/3.;}
 void main(){
  vec2 p=vec2(gl_FragCoord.x,uRes.y*uDpr-gl_FragCoord.y)/uDpr;
- float dp=pillD(p);float dd=dropD(p);
+ float dp=pillD(p);float dcon=containerD(p);float dd=dropD(p);
  float h0=H(p);vec3 n=normalize(vec3(h0-H(p+vec2(1.,0.)),h0-H(p+vec2(0.,1.)),1.));
  vec3 V=vec3(0.,0.,1.);
  float spec=pow(max(dot(reflect(-normalize(vec3(-.45,-.8,.85)),n),V),0.),70.);
  float spec2=pow(max(dot(reflect(-normalize(vec3(.6,.75,.7)),n),V),0.),22.)*.3;
  float fres=clamp((1.-n.z)*4.,0.,1.);
- vec3 oceanIrid=.5+.5*cos(6.2831*(vec3(0.,.33,.67)+fres*.85+p.x*.0028+uTime*.035));
- vec3 emIrid=mix(vec3(0.04,0.48,0.34),vec3(0.20,0.83,0.60),.5+.5*cos(6.2831*(fres*.75+p.x*.0026+p.y*.002+uTime*.035)));
- vec3 monoIrid=vec3(0.45)+0.35*cos(6.2831*(fres*.75+p.x*.0026+p.y*.002+uTime*.035));
+ vec3 oceanIrid=.5+.5*cos(6.2831*(vec3(0.,.33,.67)+fres*.85+p.x*.0028+uTime*.04));
+ vec3 emIrid=mix(vec3(0.04,0.48,0.34),vec3(0.20,0.83,0.60),.5+.5*cos(6.2831*(fres*.75+p.x*.0026+p.y*.002+uTime*.04)));
+ vec3 monoIrid=vec3(0.45)+0.35*cos(6.2831*(fres*.75+p.x*.0026+p.y*.002+uTime*.04));
  vec3 irid=mix(mix(oceanIrid,emIrid,uEmerald),monoIrid,uMono);
- float pm=smoothstep(1.,-1.,dp);float dm=smoothstep(1.,-1.,dd)*smoothstep(1.,-2.,dp);
- float sh=smoothstep(9.,-9.,dropD(p-vec2(0.,5.)))*(1.-dm)*pm*(.11+.07*uDark);
+ float pm=smoothstep(1.,-1.,dp);float cm=smoothstep(1.,-1.,dcon);float dm=smoothstep(1.,-1.,dd)*smoothstep(1.,-2.,dcon);
+ float sh=smoothstep(9.,-9.,dropD(p-vec2(0.,5.)))*(1.-dm)*cm*(.11+.07*uDark);
  vec3 shCol=mix(mix(vec3(0.,.14,.36),vec3(.02,.20,.13),uEmerald),vec3(.02),uMono);
  vec3 c=shCol*sh;float a=sh;
  float pa=clamp(pm*(fres*.42+spec*.7+spec2*.6)*uShowRim,0.,1.);
@@ -266,33 +277,35 @@ void main(){
  gl_FragColor=vec4(c,a);
 }`;
 
-type Body = { x: number; y: number; vx: number; vy: number };
-type Sat = { x: number; y: number; vx: number; vy: number; r: number; k: number };
-type Rip = { x: number; y: number; age: number; amp: number };
+type GlContext = { gl: WebGLRenderingContext; u: Record<string, WebGLUniformLocation | null> };
 
 function makeState() {
   return {
-    a: { x: 0, y: 0, vx: 0, vy: 0 } as Body,
-    b: { x: 0, y: 0, vx: 0, vy: 0 } as Body,
+    a: { x: 0, y: 0, vx: 0, vy: 0 },
+    b: { x: 0, y: 0, vx: 0, vy: 0 },
     sy: { s: 1, v: 0 },
     lead: 0 as 0 | 1,
-    lagRemaining: 0,
-    sats: [] as Sat[],
-    rips: [] as Rip[],
+    sats: [] as { x: number; y: number; vx: number; vy: number; r: number; k: number }[],
+    rips: [] as { x: number; y: number; age: number; amp: number }[],
     t: { x: 0, y: 0, q: 0, r: 21 },
     q: 0,
+    r: 21,
     mouse: { x: 0, y: 0, s: 0, on: false },
     moving: false,
     split: false,
     ready: false,
     w: 0,
     h: 0,
+    liveSub: null as SurfaceRect | null,
+    liveBridge: null as SurfaceRect | null,
+    retreatSub: null as SurfaceRect | null,
+    retreatBridge: null as SurfaceRect | null,
     visible: true,
     reduce: false,
     raf: 0,
     last: 0,
     time: 0,
-    glc: null as null | { gl: WebGLRenderingContext; u: Record<string, WebGLUniformLocation | null> },
+    glc: null as GlContext | null,
   };
 }
 
@@ -333,6 +346,9 @@ function initGL(canvas: HTMLCanvasElement) {
     "uTime",
     "uPill",
     "uPillRad",
+    "uSubPanel",
+    "uSubRad",
+    "uBridge",
     "uBlob",
     "uSy",
     "uRip",
@@ -371,7 +387,11 @@ export interface LiquidWaterSurfaceProps {
   borderRadius?: number;
   enabled?: boolean;
   rippleSignal?: { index: number; seq: number } | null;
-  speed?: number;
+  subPanelRef?: React.RefObject<HTMLElement | null>;
+  bridgeTriggerRef?: React.RefObject<HTMLElement | null>;
+  subPanelActive?: boolean;
+  subPanelKey?: string;
+  subPanelRadius?: number;
 }
 
 export function LiquidWaterSurface({
@@ -383,7 +403,11 @@ export function LiquidWaterSurface({
   borderRadius = 999,
   enabled = true,
   rippleSignal = null,
-  speed = 1,
+  subPanelRef,
+  bridgeTriggerRef,
+  subPanelActive = false,
+  subPanelKey = "",
+  subPanelRadius = 16,
 }: LiquidWaterSurfaceProps) {
   useNimbusStyles();
   const canvasRef = React.useRef<HTMLCanvasElement>(null);
@@ -400,232 +424,21 @@ export function LiquidWaterSurface({
   const monoRef = React.useRef(mono);
   const radiusRef = React.useRef(borderRadius);
   const orientRef = React.useRef(orientation);
-  const speedRef = React.useRef(speed);
+  const activeIndexRef = React.useRef(activeIndex);
+  const subPanelActiveRef = React.useRef(subPanelActive);
+  const subRadiusRef = React.useRef(subPanelRadius);
   darkRef.current = dark;
   emeraldRef.current = emerald;
   monoRef.current = mono;
   radiusRef.current = borderRadius;
   orientRef.current = orientation;
-  speedRef.current = speed;
+  activeIndexRef.current = activeIndex;
+  subPanelActiveRef.current = subPanelActive;
+  subRadiusRef.current = subPanelRadius;
 
-  const draw = React.useCallback(() => {
-    const s = st.current;
-    const T = s.t;
-    const sep = Math.hypot(s.a.x - s.b.x, s.a.y - s.b.y);
-    const span = orientRef.current === "vertical" ? Math.max(2 * T.r, 1) : Math.max(2 * (s.q + T.r), 1);
-    const thin = Math.min(sep / span, 1);
-
-    if (s.glc) {
-      const { gl: g, u } = s.glc;
-      const dpr = Math.min(window.devicePixelRatio || 1, 2);
-      g.viewport(0, 0, g.drawingBufferWidth, g.drawingBufferHeight);
-      g.uniform2f(u.uRes, s.w + PAD * 2, s.h + PAD * 2);
-      g.uniform1f(u.uDpr, dpr);
-      g.uniform1f(u.uTime, s.time);
-      g.uniform4f(u.uPill, PAD, PAD, s.w, s.h);
-      g.uniform1f(u.uPillRad, radiusRef.current);
-
-      const blobs = new Float32Array(24);
-      const sy = new Float32Array(6).fill(1);
-      const head = s.lead === 0 ? s.a : s.b;
-      const tail = s.lead === 0 ? s.b : s.a;
-      const isVert = orientRef.current === "vertical";
-
-      blobs.set(
-        [
-          head.x,
-          head.y,
-          s.q * (1 - (isVert ? 0.14 : 0.25) * thin),
-          T.r * (1 - (isVert ? 0.08 : 0.12) * thin),
-          tail.x,
-          tail.y,
-          s.q * (1 - (isVert ? 0.55 : 0.8) * thin),
-          T.r * (1 - (isVert ? 0.35 : 0.5) * thin),
-        ],
-        0,
-      );
-      sy[0] = sy[1] = s.sy.s;
-      s.sats.slice(0, 4).forEach((d, i) => blobs.set([d.x, d.y, 0, d.r], 8 + i * 4));
-      g.uniform4fv(u.uBlob, blobs);
-      g.uniform1fv(u.uSy, sy);
-
-      const rips = new Float32Array(24);
-      s.rips.slice(-6).forEach((p, i) => rips.set([p.x, p.y, p.age, p.amp], i * 4));
-      g.uniform4fv(u.uRip, rips);
-      g.uniform3f(u.uMouse, s.mouse.x, s.mouse.y, s.mouse.s);
-      g.uniform1f(u.uDark, darkRef.current);
-      g.uniform1f(u.uAmb, s.reduce ? 0 : 1);
-      g.uniform1f(u.uEmerald, emeraldRef.current);
-      g.uniform1f(u.uMono, monoRef.current);
-      g.uniform1f(u.uShowRim, orientRef.current === "vertical" ? 0 : 1);
-      g.clearColor(0, 0, 0, 0);
-      g.clear(g.COLOR_BUFFER_BIT);
-      g.drawArrays(g.TRIANGLES, 0, 3);
-    } else if (dropRef.current) {
-      if (orientRef.current === "vertical") {
-        const r = T.r * (1 - 0.18 * thin);
-        const top = Math.min(s.a.y, s.b.y) - r - PAD;
-        const left = T.x - s.q - T.r - PAD;
-        const height = Math.abs(s.a.y - s.b.y) + 2 * r;
-        const width = 2 * (s.q + T.r);
-        dropRef.current.style.left = "0px";
-        dropRef.current.style.top = "0px";
-        dropRef.current.style.width = `${width}px`;
-        dropRef.current.style.height = `${height}px`;
-        dropRef.current.style.borderRadius = "10px";
-        dropRef.current.style.transform = `translate3d(${left}px, ${top}px, 0) scaleY(${s.sy.s})`;
-      } else {
-        const r = T.r * (1 - 0.3 * thin);
-        const left = Math.min(s.a.x, s.b.x) - s.q - r - PAD;
-        const top = T.y - r - PAD;
-        const width = Math.abs(s.a.x - s.b.x) + 2 * (s.q + r);
-        const height = 2 * r;
-        dropRef.current.style.left = "0px";
-        dropRef.current.style.top = "0px";
-        dropRef.current.style.width = `${width}px`;
-        dropRef.current.style.height = `${height}px`;
-        dropRef.current.style.borderRadius = "999px";
-        dropRef.current.style.transform = `translate3d(${left}px, ${top}px, 0) scaleY(${s.sy.s})`;
-      }
-    }
-  }, []);
-
-  const step = React.useCallback((dt: number) => {
-    const s = st.current;
-    const T = s.t;
-    s.time += dt;
-    s.q += (T.q - s.q) * Math.min(1, dt * 12);
-    const bodies = [s.a, s.b];
-    let still = true;
-
-    if (s.reduce) {
-      s.a.x = s.b.x = T.x;
-      s.a.y = s.b.y = T.y;
-      s.a.vx = s.b.vx = s.a.vy = s.b.vy = 0;
-      s.sy.s = 1;
-      s.sats = [];
-    } else {
-      const loX = PAD + 6 + s.q + T.r - 3;
-      const hiX = Math.max(loX, PAD + s.w - 6 - s.q - T.r + 3);
-      const loY = PAD + 6 + T.r - 3;
-      const hiY = Math.max(loY, PAD + s.h - 6 - T.r + 3);
-
-      bodies.forEach((B, i) => {
-        const lead = i === s.lead;
-        const k = lead ? 210 : 72;
-        const c = lead ? 25 : 13;
-        const f = !lead && s.lagRemaining > 0 ? 0.08 : 1;
-
-        B.vx += (k * (T.x - B.x) - c * B.vx) * dt * f;
-        B.x += B.vx * dt;
-        if (B.x < loX || B.x > hiX) {
-          s.sy.v -= Math.min(Math.abs(B.vx), 900) * 0.0016;
-          B.x = Math.max(loX, Math.min(hiX, B.x));
-          B.vx *= -0.25;
-        }
-
-        B.vy += (k * (T.y - B.y) - c * B.vy) * dt * f;
-        B.y += B.vy * dt;
-        if (B.y < loY || B.y > hiY) {
-          s.sy.v -= Math.min(Math.abs(B.vy), 900) * 0.0016;
-          B.y = Math.max(loY, Math.min(hiY, B.y));
-          B.vy *= -0.25;
-        }
-
-        if (
-          Math.abs(T.x - B.x) > 0.3 ||
-          Math.abs(B.vx) > 3 ||
-          Math.abs(T.y - B.y) > 0.3 ||
-          Math.abs(B.vy) > 3
-        ) {
-          still = false;
-        }
-      });
-      s.lagRemaining = Math.max(0, s.lagRemaining - dt);
-
-      const L = bodies[s.lead];
-      const speed = Math.hypot(L.vx, L.vy);
-      const syT = 1 - 0.2 * Math.min(speed / 1500, 1);
-      s.sy.v += (280 * (syT - s.sy.s) - 9 * s.sy.v) * dt;
-      s.sy.s += s.sy.v * dt;
-      if (Math.abs(s.sy.s - 1) > 0.002 || Math.abs(s.sy.v) > 0.02) still = false;
-
-      const sep = Math.hypot(s.a.x - s.b.x, s.a.y - s.b.y);
-      const isVert = orientRef.current === "vertical";
-      const threshold = isVert ? T.r * 2 - 4 : 2 * T.q + 2 * T.r - 6;
-
-      if (!s.split && s.moving && sep > threshold) {
-        s.split = true;
-        const lo = bodies[1 - s.lead];
-        const hi = bodies[s.lead];
-        [0.3, 0.5, 0.72].forEach((t, j) => {
-          s.sats.push({
-            x: lo.x + (hi.x - lo.x) * t + (Math.random() - 0.5) * 6,
-            y: lo.y + (hi.y - lo.y) * t + (Math.random() - 0.5) * 6,
-            vx: (lo.vx + hi.vx) * 0.45 + (isVert ? (Math.random() - 0.5) * 40 : 0),
-            vy: (lo.vy + hi.vy) * 0.45 + (isVert ? 0 : (Math.random() - 0.5) * 60),
-            r: 5 + Math.random() * 3 - j * 0.5,
-            k: 70 + Math.random() * 90,
-          });
-        });
-      }
-
-      s.sats = s.sats.filter((d) => {
-        d.vx += (d.k * (T.x - d.x) - 9 * d.vx) * dt;
-        d.vy += (d.k * (T.y - d.y) - 8 * d.vy) * dt;
-        d.x += d.vx * dt;
-        d.y += d.vy * dt;
-        d.x = Math.max(PAD + 8 + d.r, Math.min(PAD + s.w - 8 - d.r, d.x));
-        d.y = Math.max(PAD + 8 + d.r, Math.min(PAD + s.h - 8 - d.r, d.y));
-        const dx = Math.abs(T.x - d.x);
-        const dy = Math.abs(T.y - d.y);
-        if (dx < T.q + T.r * 0.5 && dy < T.r * 0.75) {
-          d.r -= dt * 26;
-        }
-        return d.r > 0.6;
-      });
-      if (s.sats.length) still = false;
-    }
-
-    if (s.moving && still) {
-      s.moving = false;
-      if (s.split || !s.reduce) {
-        s.rips.push({ x: T.x, y: T.y, age: 0, amp: s.split ? 1.2 : 0.75 });
-      }
-    }
-    s.rips.forEach((p) => (p.age += dt));
-    s.rips = s.rips.filter((p) => p.age < 2.4);
-    const target = s.mouse.on ? 1 : 0;
-    s.mouse.s += (target - s.mouse.s) * Math.min(1, dt * 7);
-  }, []);
-
-  const loop = React.useCallback(() => {
-    const s = st.current;
-    if (s.raf || !s.ready) return;
-    s.last = performance.now();
-    const tick = (now: number) => {
-      const elapsed = Math.max(0.001, Math.min((now - s.last) / 1000, 0.35));
-      s.last = now;
-      const simElapsed = computeLiquidFrameDelta(elapsed, speedRef.current);
-      const substeps = Math.max(1, Math.min(16, Math.ceil(simElapsed / 0.016)));
-      const subDt = simElapsed / substeps;
-      for (let stepIdx = 0; stepIdx < substeps; stepIdx++) {
-        step(subDt);
-      }
-      draw();
-      const busy = s.moving || s.rips.length > 0 || s.sats.length > 0 || s.mouse.s > 0.01;
-      if (s.visible && (!s.reduce || busy)) {
-        s.raf = requestAnimationFrame(tick);
-      } else {
-        s.raf = 0;
-      }
-    };
-    s.raf = requestAnimationFrame(tick);
-  }, [draw, step]);
-
-  const measure = React.useCallback(() => {
+  const syncGeometry = React.useCallback((forceSnap = false) => {
     const host = hostRef.current;
-    const el = itemRefs.current[activeIndex];
+    const el = itemRefs.current[activeIndexRef.current];
     if (!host || !el || host.offsetWidth === 0 || el.offsetWidth === 0) return;
 
     const s = st.current;
@@ -638,19 +451,19 @@ export function LiquidWaterSurface({
     const T = s.t;
     T.r = elRect.height / 2;
     T.q = Math.max(0, elRect.width / 2 - T.r);
-    const nx = PAD + (elRect.left - hostRect.left) + elRect.width / 2;
-    const ny = PAD + (elRect.top - hostRect.top) + elRect.height / 2;
+    const nx = elRect.left - hostRect.left + elRect.width / 2;
+    const ny = elRect.top - hostRect.top + elRect.height / 2;
 
-    if (!s.ready) {
+    if (!s.ready || forceSnap) {
       s.a.x = s.b.x = nx;
       s.a.y = s.b.y = ny;
       s.q = T.q;
+      s.r = T.r;
       s.ready = true;
     } else if (Math.abs(nx - T.x) > 0.5 || Math.abs(ny - T.y) > 0.5) {
       const da = Math.hypot(nx - s.a.x, ny - s.a.y);
       const db = Math.hypot(nx - s.b.x, ny - s.b.y);
       s.lead = da <= db ? 0 : 1;
-      s.lagRemaining = 0.07;
       s.moving = true;
       s.split = false;
     }
@@ -658,20 +471,342 @@ export function LiquidWaterSurface({
     T.x = nx;
     T.y = ny;
 
+    const subEl = subPanelActiveRef.current ? subPanelRef?.current : null;
+    if (subEl && subEl.offsetWidth > 1 && subEl.offsetHeight > 1) {
+      const sr = subEl.getBoundingClientRect();
+      if (sr.width > 1 && sr.height > 1) {
+        const nextSub: SurfaceRect = {
+          x: sr.left - hostRect.left,
+          y: sr.top - hostRect.top,
+          width: sr.width,
+          height: sr.height,
+          radius: subRadiusRef.current,
+        };
+        const trigEl = bridgeTriggerRef?.current;
+        const trigRect = trigEl
+          ? (() => {
+              const tr = trigEl.getBoundingClientRect();
+              return tr.width > 1 && tr.height > 1
+                ? {
+                    x: tr.left - hostRect.left,
+                    y: tr.top - hostRect.top,
+                    width: tr.width,
+                    height: tr.height,
+                  }
+                : null;
+            })()
+          : null;
+        const nextBridge = computeBridgeRect(trigRect, nextSub);
+        s.liveSub = nextSub;
+        s.liveBridge = nextBridge;
+        s.retreatSub = nextSub;
+        s.retreatBridge = nextBridge;
+      } else {
+        s.liveSub = null;
+        s.liveBridge = null;
+      }
+    } else {
+      s.liveSub = null;
+      s.liveBridge = null;
+    }
+  }, [bridgeTriggerRef, hostRef, itemRefs, subPanelRef]);
+
+  const draw = React.useCallback(() => {
+    const s = st.current;
+    const T = s.t;
+    const effectiveSub = s.liveSub ?? s.retreatSub;
+    const effectiveBridge = s.liveSub ? s.liveBridge : s.retreatBridge;
+    const bounds = computeSurfaceCanvasBounds(s.w, s.h, PAD, effectiveSub);
+
     const cv = canvasRef.current;
     if (cv) {
       const dpr = Math.min(window.devicePixelRatio || 1, 2);
-      const W = s.w + PAD * 2;
-      const Hh = s.h + PAD * 2;
-      if (cv.width !== Math.round(W * dpr) || cv.height !== Math.round(Hh * dpr)) {
-        cv.width = Math.round(W * dpr);
-        cv.height = Math.round(Hh * dpr);
-        cv.style.width = `${W}px`;
-        cv.style.height = `${Hh}px`;
+      const targetW = Math.round(bounds.canvasWidth * dpr);
+      const targetH = Math.round(bounds.canvasHeight * dpr);
+      if (cv.width !== targetW || cv.height !== targetH) {
+        cv.width = targetW;
+        cv.height = targetH;
+      }
+      cv.style.left = `${bounds.canvasLeft}px`;
+      cv.style.top = `${bounds.canvasTop}px`;
+      cv.style.width = `${bounds.canvasWidth}px`;
+      cv.style.height = `${bounds.canvasHeight}px`;
+    }
+
+    const sep = Math.hypot(s.a.x - s.b.x, s.a.y - s.b.y);
+    const isVert = isVerticalTravel(s.a.x, s.a.y, s.b.x, s.b.y, orientRef.current);
+    const span = isVert ? Math.max(2 * s.r, 1) : Math.max(2 * (s.q + s.r), 1);
+    const thin = Math.min(sep / span, 1);
+
+    if (s.glc) {
+      const { gl: g, u } = s.glc;
+      const dpr = Math.min(window.devicePixelRatio || 1, 2);
+      const ox = bounds.hostOffsetX;
+      const oy = bounds.hostOffsetY;
+
+      g.viewport(0, 0, g.drawingBufferWidth, g.drawingBufferHeight);
+      g.uniform2f(u.uRes, bounds.canvasWidth, bounds.canvasHeight);
+      g.uniform1f(u.uDpr, dpr);
+      g.uniform1f(u.uTime, s.time);
+      g.uniform4f(u.uPill, ox, oy, s.w, s.h);
+      g.uniform1f(u.uPillRad, radiusRef.current);
+      if (effectiveSub) {
+        g.uniform4f(
+          u.uSubPanel,
+          ox + effectiveSub.x,
+          oy + effectiveSub.y,
+          effectiveSub.width,
+          effectiveSub.height,
+        );
+        g.uniform1f(u.uSubRad, effectiveSub.radius ?? subRadiusRef.current);
+      } else {
+        g.uniform4f(u.uSubPanel, 0, 0, 0, 0);
+        g.uniform1f(u.uSubRad, subRadiusRef.current);
+      }
+      if (effectiveBridge) {
+        g.uniform4f(
+          u.uBridge,
+          ox + effectiveBridge.x,
+          oy + effectiveBridge.y,
+          effectiveBridge.width,
+          effectiveBridge.height,
+        );
+      } else {
+        g.uniform4f(u.uBridge, 0, 0, 0, 0);
+      }
+
+      const blobs = new Float32Array(24);
+      const sy = new Float32Array(6).fill(1);
+      const head = s.lead === 0 ? s.a : s.b;
+      const tail = s.lead === 0 ? s.b : s.a;
+
+      blobs.set(
+        [
+          ox + head.x,
+          oy + head.y,
+          s.q * (1 - (isVert ? 0.14 : 0.25) * thin),
+          s.r * (1 - (isVert ? 0.08 : 0.12) * thin),
+          ox + tail.x,
+          oy + tail.y,
+          s.q * (1 - (isVert ? 0.55 : 0.8) * thin),
+          s.r * (1 - (isVert ? 0.35 : 0.5) * thin),
+        ],
+        0,
+      );
+      sy[0] = sy[1] = s.sy.s;
+      s.sats.slice(0, 4).forEach((d, i) => blobs.set([ox + d.x, oy + d.y, 0, d.r], 8 + i * 4));
+      g.uniform4fv(u.uBlob, blobs);
+      g.uniform1fv(u.uSy, sy);
+
+      const rips = new Float32Array(24);
+      s.rips.slice(-6).forEach((p, i) => rips.set([ox + p.x, oy + p.y, p.age, p.amp], i * 4));
+      g.uniform4fv(u.uRip, rips);
+      g.uniform3f(u.uMouse, ox + s.mouse.x, oy + s.mouse.y, s.mouse.s);
+      g.uniform1f(u.uDark, darkRef.current);
+      g.uniform1f(u.uAmb, s.reduce ? 0 : 1);
+      g.uniform1f(u.uEmerald, emeraldRef.current);
+      g.uniform1f(u.uMono, monoRef.current);
+      g.uniform1f(u.uShowRim, orientRef.current === "vertical" ? 0 : 1);
+      g.clearColor(0, 0, 0, 0);
+      g.clear(g.COLOR_BUFFER_BIT);
+      g.drawArrays(g.TRIANGLES, 0, 3);
+    } else if (dropRef.current) {
+      const invScale = 1 / Math.max(0.7, Math.sqrt(Math.max(0.5, s.sy.s)));
+      if (isVert) {
+        const r = s.r * (1 - 0.18 * thin);
+        const top = Math.min(s.a.y, s.b.y) - r;
+        const left = (s.a.x + s.b.x) * 0.5 - s.q - s.r;
+        const height = Math.abs(s.a.y - s.b.y) + 2 * r;
+        const width = 2 * (s.q + s.r);
+        dropRef.current.style.left = "0px";
+        dropRef.current.style.top = "0px";
+        dropRef.current.style.width = `${width}px`;
+        dropRef.current.style.height = `${height}px`;
+        dropRef.current.style.borderRadius = "10px";
+        dropRef.current.style.transform = `translate3d(${left}px, ${top}px, 0) scale(${invScale}, ${s.sy.s})`;
+      } else {
+        const r = s.r * (1 - 0.3 * thin);
+        const left = Math.min(s.a.x, s.b.x) - s.q - r;
+        const top = (s.a.y + s.b.y) * 0.5 - r;
+        const width = Math.abs(s.a.x - s.b.x) + 2 * (s.q + r);
+        const height = 2 * r;
+        dropRef.current.style.left = "0px";
+        dropRef.current.style.top = "0px";
+        dropRef.current.style.width = `${width}px`;
+        dropRef.current.style.height = `${height}px`;
+        dropRef.current.style.borderRadius = "999px";
+        dropRef.current.style.transform = `translate3d(${left}px, ${top}px, 0) scale(${invScale}, ${s.sy.s})`;
       }
     }
+  }, []);
+
+  const step = React.useCallback((dt: number) => {
+    const s = st.current;
+    const T = s.t;
+    const effectiveSub = s.liveSub ?? s.retreatSub;
+    s.time += dt;
+    s.q += (T.q - s.q) * Math.min(1, dt * 12);
+    s.r += (T.r - s.r) * Math.min(1, dt * 12);
+    const bodies = [s.a, s.b];
+    let still = true;
+
+    if (s.reduce) {
+      s.a.x = s.b.x = T.x;
+      s.a.y = s.b.y = T.y;
+      s.a.vx = s.b.vx = s.a.vy = s.b.vy = 0;
+      s.q = T.q;
+      s.r = T.r;
+      s.sy.s = 1;
+      s.sy.v = 0;
+      s.sats = [];
+    } else {
+      bodies.forEach((B, i) => {
+        const isLead = i === s.lead;
+        const k = isLead ? 280 : 130;
+        const c = isLead ? 22 : 16;
+        const bounds = computeWaterStepBounds(s.w, s.h, effectiveSub, B.y, s.q, s.r);
+
+        B.vx += (k * (T.x - B.x) - c * B.vx) * dt;
+        B.x += B.vx * dt;
+        if (B.x < bounds.loX || B.x > bounds.hiX) {
+          s.sy.v -= Math.min(Math.abs(B.vx), 400) * 0.002;
+          B.x = Math.max(bounds.loX, Math.min(bounds.hiX, B.x));
+          B.vx *= -0.35;
+        }
+
+        B.vy += (k * (T.y - B.y) - c * B.vy) * dt;
+        B.y += B.vy * dt;
+        if (B.y < bounds.loY || B.y > bounds.hiY) {
+          s.sy.v -= Math.min(Math.abs(B.vy), 400) * 0.002;
+          B.y = Math.max(bounds.loY, Math.min(bounds.hiY, B.y));
+          B.vy *= -0.35;
+        }
+
+        if (
+          Math.abs(T.x - B.x) > 0.4 ||
+          Math.abs(B.vx) > 2 ||
+          Math.abs(T.y - B.y) > 0.4 ||
+          Math.abs(B.vy) > 2
+        ) {
+          still = false;
+        }
+      });
+
+      const L = bodies[s.lead];
+      const speed = Math.hypot(L.vx, L.vy);
+      const sep = Math.hypot(s.a.x - s.b.x, s.a.y - s.b.y);
+      const isVert = isVerticalTravel(s.a.x, s.a.y, s.b.x, s.b.y, orientRef.current);
+      const span = isVert ? Math.max(2 * s.r, 1) : Math.max(2 * (s.q + s.r), 1);
+      const stretch = Math.min(sep / span, 1);
+      const syTarget = 1 - 0.16 * Math.min(speed / 650, 1) - 0.08 * stretch;
+      s.sy.v += (280 * (syTarget - s.sy.s) - 18 * s.sy.v) * dt;
+      s.sy.s = Math.max(0.7, Math.min(1.25, s.sy.s + s.sy.v * dt));
+      if (Math.abs(s.sy.s - 1) > 0.002 || Math.abs(s.sy.v) > 0.02) still = false;
+
+      const threshold = isVert ? s.r * 2 - 4 : 2 * T.q + 2 * s.r - 6;
+
+      if (!s.split && s.moving && sep > threshold) {
+        s.split = true;
+        const lo = bodies[1 - s.lead];
+        const hi = bodies[s.lead];
+        [0.32, 0.54, 0.74].forEach((t, j) => {
+          s.sats.push({
+            x: lo.x + (hi.x - lo.x) * t + (Math.random() - 0.5) * 6,
+            y: lo.y + (hi.y - lo.y) * t + (Math.random() - 0.5) * 6,
+            vx: (lo.vx + hi.vx) * 0.45 + (isVert ? (Math.random() - 0.5) * 28 : 0),
+            vy: (lo.vy + hi.vy) * 0.45 + (isVert ? 0 : (Math.random() - 0.5) * 36),
+            r: 4.8 + Math.random() * 2.5 - j * 0.5,
+            k: 0.9 + Math.random() * 0.3,
+          });
+        });
+      }
+
+      const satMinX = effectiveSub ? Math.min(0, effectiveSub.x) : 0;
+      const satMaxX = effectiveSub ? Math.max(s.w, effectiveSub.x + effectiveSub.width) : s.w;
+      const satMaxY = effectiveSub ? Math.max(s.h, effectiveSub.y + effectiveSub.height) : s.h;
+
+      const nextSats: typeof s.sats = [];
+      for (const d of s.sats) {
+        d.vx += (150 * d.k * (T.x - d.x) - 14 * d.vx) * dt;
+        d.vy += (150 * d.k * (T.y - d.y) - 14 * d.vy) * dt;
+        d.x += d.vx * dt;
+        d.y += d.vy * dt;
+        d.x = Math.max(satMinX + 8 + d.r, Math.min(satMaxX - 8 - d.r, d.x));
+        d.y = Math.max(8 + d.r, Math.min(satMaxY - 8 - d.r, d.y));
+        const dx = Math.abs(T.x - d.x);
+        const dy = Math.abs(T.y - d.y);
+        if (dx < T.q + s.r * 0.55 && dy < s.r * 0.8) {
+          d.r -= dt * 26;
+        }
+        if (d.r > 0.65) {
+          nextSats.push(d);
+        } else if (s.rips.length < 6) {
+          s.rips.push({ x: d.x, y: d.y, age: 0, amp: 0.3 });
+        }
+      }
+      s.sats = nextSats;
+      if (s.sats.length) still = false;
+    }
+
+    if (s.moving && still) {
+      s.moving = false;
+      if (s.split || !s.reduce) {
+        s.rips.push({ x: T.x, y: T.y, age: 0, amp: s.split ? 1 : 0.65 });
+      }
+    }
+
+    s.rips.forEach((p) => {
+      p.age += dt;
+    });
+    s.rips = s.rips.filter((p) => p.age < 2.2);
+
+    if (
+      !s.liveSub &&
+      s.retreatSub &&
+      isDropletInsideHost(s.a.y, s.b.y, s.h) &&
+      !s.sats.some((d) => d.y > s.h + 4) &&
+      !s.rips.some((r) => r.y > s.h + 4)
+    ) {
+      s.retreatSub = null;
+      s.retreatBridge = null;
+    }
+
+    const target = s.mouse.on ? 1 : 0;
+    s.mouse.s += (target - s.mouse.s) * Math.min(1, dt * 10);
+  }, []);
+
+  const loop = React.useCallback(() => {
+    const s = st.current;
+    if (s.raf || !s.ready) return;
+    s.last = performance.now();
+    const tick = (now: number) => {
+      const dt = Math.min((now - s.last) / 1000, 0.05);
+      s.last = now;
+      if (subPanelActiveRef.current || s.retreatSub) {
+        syncGeometry(false);
+      }
+      step(dt);
+      draw();
+      const busy =
+        s.moving ||
+        s.rips.length > 0 ||
+        s.sats.length > 0 ||
+        s.mouse.s > 0.01 ||
+        Boolean(s.liveSub) ||
+        Boolean(s.retreatSub);
+      if (s.visible && (!s.reduce || busy)) {
+        s.raf = requestAnimationFrame(tick);
+      } else {
+        s.raf = 0;
+      }
+    };
+    s.raf = requestAnimationFrame(tick);
+  }, [draw, step, syncGeometry]);
+
+  const measure = React.useCallback(() => {
+    syncGeometry(false);
     loop();
-  }, [activeIndex, hostRef, itemRefs, loop]);
+  }, [loop, syncGeometry]);
 
   React.useEffect(() => {
     if (!enabled) return;
@@ -712,8 +847,8 @@ export function LiquidWaterSurface({
     const onMove = (e: PointerEvent) => {
       if (e.pointerType !== "mouse") return;
       const r = host.getBoundingClientRect();
-      s.mouse.x = e.clientX - r.left + PAD;
-      s.mouse.y = e.clientY - r.top + PAD;
+      s.mouse.x = e.clientX - r.left;
+      s.mouse.y = e.clientY - r.top;
       s.mouse.on = true;
       loop();
     };
@@ -725,8 +860,8 @@ export function LiquidWaterSurface({
       if (s.reduce) return;
       const r = host.getBoundingClientRect();
       s.rips.push({
-        x: e.clientX - r.left + PAD,
-        y: e.clientY - r.top + PAD,
+        x: e.clientX - r.left,
+        y: e.clientY - r.top,
         age: 0,
         amp: 0.85,
       });
@@ -761,11 +896,11 @@ export function LiquidWaterSurface({
 
   React.useLayoutEffect(() => {
     if (enabled) measure();
-  }, [enabled, measure, orientation]);
+  }, [activeIndex, enabled, measure, orientation, subPanelActive, subPanelKey]);
 
   React.useEffect(() => {
     if (enabled) measure();
-  }, [enabled, measure, orientation]);
+  }, [activeIndex, enabled, measure, orientation, subPanelActive, subPanelKey]);
 
   React.useEffect(() => {
     if (!enabled || !rippleSignal) return;
@@ -776,8 +911,8 @@ export function LiquidWaterSurface({
     const hr = host.getBoundingClientRect();
     const er = el.getBoundingClientRect();
     s.rips.push({
-      x: PAD + (er.left - hr.left) + er.width / 2,
-      y: PAD + (er.top - hr.top) + er.height / 2,
+      x: er.left - hr.left + er.width / 2,
+      y: er.top - hr.top + er.height / 2,
       age: 0,
       amp: 0.9,
     });

@@ -1,25 +1,21 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { AppLoader } from './components/AppLoader';
-import { ClientTestimonial } from './components/ClientTestimonial';
-import { CosmicSky } from './components/CosmicSky';
-import { FeaturesSection } from './components/FeaturesSection';
-import { HeroDashboard } from './components/HeroDashboard';
-import { LogosAndBento } from './components/LogosAndBento';
-import { PricingSection } from './components/PricingSection';
-import { ReviewDeckSection } from './components/ReviewDeckSection';
-import {
-  RouteTransitionLoader,
-  type TransitionLoaderPhase,
-} from './components/RouteTransitionLoader';
-import { SiteFooter } from './components/SiteFooter';
-import { SiteHeader } from './components/SiteHeader';
-import { WaitlistSection } from './components/WaitlistSection';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { AppLoader } from './components/layout/AppLoader';
+import { CosmicSky } from './components/layout/CosmicSky';
+import { SiteFooter } from './components/layout/SiteFooter';
+import { SiteHeader } from './components/layout/SiteHeader';
+import { ClientTestimonial } from './components/sections/ClientTestimonial';
+import { FeaturesSection } from './components/sections/FeaturesSection';
+import { HeroDashboard } from './components/sections/HeroDashboard';
+import { LogosAndBento } from './components/sections/LogosAndBento';
+import { PricingSection } from './components/sections/PricingSection';
+import { ReviewDeckSection } from './components/sections/ReviewDeckSection';
+import { WaitlistSection } from './components/sections/WaitlistSection';
+import { PacketCardTransition } from './components/widgets/PacketCardTransition';
 import {
   REVIEWS_HASH,
-  ROUTE_LOADER_FADE_MS,
-  ROUTE_LOADER_HOLD_MS,
   resolvePageFromLocation,
   type AppPage,
+  type PacketOriginRect,
 } from './utils/appRoute';
 import { filterKeywords } from './utils/keywords';
 import {
@@ -40,65 +36,43 @@ export default function App() {
   const [query, setQuery] = useState('');
   const [recentSearches, setRecentSearches] = useState<string[]>(() => loadRecentSearches());
   const [termsOpen, setTermsOpen] = useState(true);
-  const [transitionPhase, setTransitionPhase] = useState<TransitionLoaderPhase>('idle');
-  const transitionTimersRef = useRef<number[]>([]);
+  const [packetOrigin, setPacketOrigin] = useState<PacketOriginRect | null>(null);
 
   const visibleKeywords = useMemo(() => filterKeywords(query), [query]);
 
-  const clearTransitionTimers = useCallback(() => {
-    for (const id of transitionTimersRef.current) {
-      window.clearTimeout(id);
-    }
-    transitionTimersRef.current = [];
-  }, []);
-
-  useEffect(() => () => clearTransitionTimers(), [clearTransitionTimers]);
-
-  const runPageTransition = useCallback(
-    (switchPage: () => void) => {
-      clearTransitionTimers();
-      const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-      const swapMs = reduced ? 10 : 180;
-      const holdMs = reduced ? 90 : ROUTE_LOADER_HOLD_MS;
-      const fadeMs = reduced ? 60 : ROUTE_LOADER_FADE_MS;
-
-      setTransitionPhase('entering');
-
-      const tSwap = window.setTimeout(() => {
-        switchPage();
-      }, swapMs);
-
-      const tFade = window.setTimeout(() => {
-        setTransitionPhase('fading');
-      }, holdMs);
-
-      const tIdle = window.setTimeout(() => {
-        setTransitionPhase('idle');
-      }, holdMs + fadeMs);
-
-      transitionTimersRef.current = [tSwap, tFade, tIdle];
-    },
-    [clearTransitionTimers],
-  );
-
-  const navigateToReviews = useCallback(() => {
-    setDiOpen(false);
-    if (activePage === 'reviews') {
-      window.scrollTo({ top: 0, behavior: 'auto' });
-      return;
-    }
-    runPageTransition(() => {
+  const navigateToReviews = useCallback(
+    (originRect?: PacketOriginRect) => {
+      setDiOpen(false);
+      if (activePage === 'reviews') {
+        window.scrollTo({ top: 0, behavior: 'auto' });
+        return;
+      }
+      if (originRect) {
+        setPacketOrigin(originRect);
+        return;
+      }
       if (window.location.hash !== REVIEWS_HASH) {
         window.history.pushState({ page: 'reviews' }, '', REVIEWS_HASH);
       }
       setActivePage('reviews');
       window.scrollTo({ top: 0, behavior: 'auto' });
-    });
-  }, [activePage, runPageTransition]);
+    },
+    [activePage],
+  );
+
+  const handlePacketComplete = useCallback(() => {
+    if (window.location.hash !== REVIEWS_HASH) {
+      window.history.pushState({ page: 'reviews' }, '', REVIEWS_HASH);
+    }
+    setActivePage('reviews');
+    window.scrollTo({ top: 0, behavior: 'auto' });
+    setPacketOrigin(null);
+  }, []);
 
   const navigateToHome = useCallback(
     (sectionId?: string) => {
       setDiOpen(false);
+      setPacketOrigin(null);
       const nextUrl = `${window.location.pathname}${window.location.search}${sectionId ? `#${sectionId}` : ''}`;
 
       if (activePage === 'home') {
@@ -111,19 +85,17 @@ export default function App() {
         return;
       }
 
-      runPageTransition(() => {
-        window.history.pushState({ page: 'home', sectionId: sectionId ?? null }, '', nextUrl);
-        setActivePage('home');
-        window.setTimeout(() => {
-          if (sectionId) {
-            document.getElementById(sectionId)?.scrollIntoView({ behavior: 'auto', block: 'start' });
-          } else {
-            window.scrollTo({ top: 0, behavior: 'auto' });
-          }
-        }, 40);
-      });
+      window.history.pushState({ page: 'home', sectionId: sectionId ?? null }, '', nextUrl);
+      setActivePage('home');
+      window.setTimeout(() => {
+        if (sectionId) {
+          document.getElementById(sectionId)?.scrollIntoView({ behavior: 'auto', block: 'start' });
+        } else {
+          window.scrollTo({ top: 0, behavior: 'auto' });
+        }
+      }, 40);
     },
-    [activePage, runPageTransition],
+    [activePage],
   );
 
   const handleOpenDi = useCallback(() => {
@@ -252,7 +224,6 @@ export default function App() {
   return (
     <>
       <AppLoader />
-      <RouteTransitionLoader phase={transitionPhase} />
       <CosmicSky />
 
       <SiteHeader
@@ -271,6 +242,13 @@ export default function App() {
         activePage={activePage}
         onNavigateHome={navigateToHome}
       />
+
+      {packetOrigin && (
+        <PacketCardTransition
+          originRect={packetOrigin}
+          onComplete={handlePacketComplete}
+        />
+      )}
 
       <main className="relative z-10">
         {activePage === 'reviews' ? (
